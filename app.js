@@ -1,22 +1,60 @@
-import { 
-  HomeScreen, 
-  StrengthScreen, 
-  CardioScreen, 
-  PlanScreen, 
-  ProgressScreen, 
-  BodyScreen, 
-  SyncScreen, 
-  Nav, 
-  RestTimer 
-} from './components/HomeScreen.js';   // Wait — no, since we are using individual files, change to:
+import { h, render } from 'https://esm.sh/preact@10.29.0';
+import { useState, useEffect } from 'https://esm.sh/preact@10.29.0/hooks';
+import { html } from 'https://esm.sh/htm@3.1.1/preact?external=preact';
 
-// Correct imports for separate files:
-import { HomeScreen } from './components/HomeScreen.js';
-import { StrengthScreen } from './components/StrengthScreen.js';
-import { CardioScreen } from './components/CardioScreen.js';
-import { PlanScreen } from './components/PlanScreen.js';
-import { ProgressScreen } from './components/ProgressScreen.js';
-import { BodyScreen } from './components/BodyScreen.js';
-import { SyncScreen } from './components/SyncScreen.js';
-import { Nav } from './components/Nav.js';
-import { RestTimer } from './components/RestTimer.js';
+import { dbGetAll, dbPut, drainSyncQueue } from './store.js';
+import { SEED_STR, SEED_CAR } from './utils.js';
+
+// Import everything from the single components.js file
+import { 
+  HomeScreen, StrengthScreen, CardioScreen, PlanScreen, 
+  ProgressScreen, BodyScreen, SyncScreen, Nav, RestTimer 
+} from './components.js';
+
+function App() {
+  const [tab, setTab] = useState('home');
+  const [strSessions, setStrSessions] = useState([]);
+  const [carSessions, setCarSessions] = useState([]);
+  const [ready, setReady] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+
+  useEffect(() => {
+    // DB init + seed data + auto sync (your original logic)
+    let strL = [], carL = [];
+    const p1 = dbGetAll('strength').then(d => strL = d).catch(() => strL = []);
+    const p2 = dbGetAll('cardio').then(d => carL = d).catch(() => carL = []);
+
+    Promise.all([p1, p2]).then(() => {
+      if (!strL.length) strL = SEED_STR.slice();
+      if (!carL.length) carL = SEED_CAR.slice();
+      const sortF = (a,b) => a.date < b.date ? 1 : -1;
+      setStrSessions(strL.sort(sortF));
+      setCarSessions(carL.sort(sortF));
+      setReady(true);
+    }).catch(err => {
+      console.error(err);
+      setReady(true);
+    });
+  }, []);
+
+  if (!ready) {
+    return html`<div class="h-full flex items-center justify-center bg-[#03070b] text-[#00f3ff] font-mono">LOADING TACTICAL CORE...</div>`;
+  }
+
+  return html`
+    <div class="h-full flex flex-col bg-[#03070b]">
+      ${tab === 'home' ? html`<${HomeScreen} strSessions=${strSessions} carSessions=${carSessions}/>` : null}
+      ${tab === 'strength' ? html`<${StrengthScreen}/>` : null}
+      ${tab === 'cardio' ? html`<${CardioScreen}/>` : null}
+      ${tab === 'plan' ? html`<${PlanScreen}/>` : null}
+      ${tab === 'progress' ? html`<${ProgressScreen}/>` : null}
+      ${tab === 'body' ? html`<${BodyScreen}/>` : null}
+      ${tab === 'sync' ? html`<${SyncScreen}/>` : null}
+
+      <${RestTimer}/>
+      <${Nav} tab=${tab} setTab=${setTab}/>
+    </div>`;
+}
+
+render(html`<${App}/>`, document.getElementById('app'));
