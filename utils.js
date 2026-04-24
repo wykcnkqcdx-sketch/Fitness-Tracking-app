@@ -84,9 +84,9 @@ export const EXERCISE_LIB = {
   Legs: ['Squat', 'Deadlift']
 };
 
-export const CARDIO_TYPES = ['Run', 'Bike', 'Row', 'Swim'];
+export const CARDIO_TYPES = ['Run', 'Walk', 'Bike', 'Row', 'Swim', 'Other'];
 
-export const EFFORT_LBL = ['Very Easy', 'Easy', 'Moderate', 'Hard', 'Very Hard', 'Max'];
+export const EFFORT_LBL = ['Rest', 'Very Easy', 'Easy', 'Steady', 'Moderate', 'Working', 'Strong', 'Hard', 'Very Hard', 'Near Max', 'Max'];
 
 export const todayISO = () => new Date().toISOString().split('T')[0];
 export const fmtLabel = (iso) => new Date(iso).toLocaleDateString('en-CA');

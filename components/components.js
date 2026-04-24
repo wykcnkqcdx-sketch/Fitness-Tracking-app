@@ -218,7 +218,28 @@ export function CardioForm(props){
     var cleanedSplits=splits.filter(function(s){return s.time||s.pace||s.hr;}).map(function(s,i){
       return {km:i+1,time:s.time||'-',pace:s.pace||'-',hr:parseInt(s.hr)||0};
     });
-    var sess={id:init.id || uid(),date:cd,label:fmtLabel(cd),type:ct,duration:cDur,distanceKm:distNum,elevationM:parseInt(cElev)||0,avgPace:'-',avgHR:hrNum,maxHR:parseInt(cMaxHR)||0,activeKcal:parseInt(cKcal)||0,totalKcal:parseInt(cKcal)||0,effortScore:cEff,effortLabel:EFFORT_LBL[cEff]||'Moderate',hrZone:hrZoneFrom(hrNum),notes:cNotes.trim(),splits:cleanedSplits};
+    var sess={
+      id:init.id || uid(),
+      date:cd,
+      label:fmtLabel(cd),
+      type:ct,
+      duration:cDur,
+      distanceKm:distNum,
+      elevationM:parseInt(cElev)||0,
+      avgPace:init.avgPace || '-',
+      avgHR:hrNum,
+      maxHR:parseInt(cMaxHR)||0,
+      activeKcal:init.activeKcal !== undefined ? init.activeKcal : (parseInt(cKcal)||0),
+      totalKcal:parseInt(cKcal)||0,
+      effortScore:cEff,
+      effortLabel:init.effortLabel || EFFORT_LBL[cEff] || 'Moderate',
+      hrZone:hrZoneFrom(hrNum),
+      notes:cNotes.trim(),
+      splits:cleanedSplits
+    };
+    ['source','sourceWorkoutType','location','startTime','endTime','avgPowerW','avgCadenceSpm','imageName','rawText'].forEach(function(key){
+      if(init[key] !== undefined && init[key] !== null && init[key] !== '') sess[key] = init[key];
+    });
     props.onSave(sess).catch(function(){setErr('Save failed');setSaving(false);});
   }
 
@@ -227,6 +248,22 @@ export function CardioForm(props){
       <span style="font-size:14px;font-weight:700;color:var(--blue)">${init.id?'Edit':'New'} Cardio Session</span>
       <button class="btn-sm btn-ghost" onclick=${props.onCancel}>Cancel</button>
     </div>
+    ${init.source==='apple-watch-screenshot'?html`<div class="card" style="padding:14px;margin-bottom:14px;background:linear-gradient(180deg,rgba(0,243,255,0.08),rgba(0,136,255,0.04));border-color:rgba(0,243,255,0.28)">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div class="section-lbl" style="margin-bottom:6px">Imported screenshot review</div>
+          <div style="font-size:13px;color:var(--tx)">${init.sourceWorkoutType || init.type}</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:4px">${init.imageName || 'Apple Watch screenshot'}</div>
+        </div>
+        <span class="tag">Review before save</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-size:12px;color:var(--mu2)">
+        <div><span style="color:var(--mu)">Time</span><div style="margin-top:2px;color:var(--tx)">${init.startTime&&init.endTime ? (init.startTime + ' - ' + init.endTime) : 'Not detected'}</div></div>
+        <div><span style="color:var(--mu)">Location</span><div style="margin-top:2px;color:var(--tx)">${init.location || 'Not detected'}</div></div>
+        <div><span style="color:var(--mu)">Avg pace</span><div style="margin-top:2px;color:var(--tx)">${init.avgPace || 'Not detected'}</div></div>
+        <div><span style="color:var(--mu)">Cadence / Power</span><div style="margin-top:2px;color:var(--tx)">${init.avgCadenceSpm || '-'} spm / ${init.avgPowerW || '-'} w</div></div>
+      </div>
+    </div>`:null}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div><label class="lbl">Date</label><input type="date" class="inp" value=${cd} onchange=${(e)=>setCd(e.target.value)}/></div>
       <div><label class="lbl">Type</label><select class="inp" value=${ct} onchange=${(e)=>setCt(e.target.value)}>${CARDIO_TYPES.map(function(t){return html`<option value=${t}>${t}</option>`;})}</select></div>
@@ -269,6 +306,133 @@ export function CardioForm(props){
     ${err?html`<div class="err">${err}</div>`:null}
     <button class="btn btn-primary" onclick=${save} disabled=${saving}>${saving?'Saving...':'Save Session'}</button>
   </div>`;
+}
+
+function monthIndexFromLabel(label){
+  var map={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  return map[String(label||'').slice(0,3).toLowerCase()];
+}
+
+function inferScreenshotDate(label){
+  if(!label) return todayISO();
+  var match=String(label).match(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\,?\s*(\d{1,2})\s+([A-Za-z]{3,})/i) || String(label).match(/(\d{1,2})\s+([A-Za-z]{3,})/i);
+  if(!match) return todayISO();
+  var monthIdx=monthIndexFromLabel(match[2]);
+  if(monthIdx===undefined) return todayISO();
+  var now=new Date();
+  var guess=new Date(now.getFullYear(), monthIdx, Number(match[1]));
+  if(guess.getTime()-now.getTime()>14*24*60*60*1000){
+    guess.setFullYear(guess.getFullYear()-1);
+  }
+  return guess.toISOString().slice(0,10);
+}
+
+function durationFromTimeRange(start,end){
+  if(!start||!end) return '';
+  var s=start.split(':').map(Number);
+  var e=end.split(':').map(Number);
+  if(s.length<2||e.length<2) return '';
+  var startM=(s[0]*60)+s[1];
+  var endM=(e[0]*60)+e[1];
+  if(endM<startM) endM += 24*60;
+  var mins=endM-startM;
+  var hours=Math.floor(mins/60);
+  var rem=mins%60;
+  return String(hours)+':' + String(rem).padStart(2,'0') + ':00';
+}
+
+function normalizePaceValue(raw){
+  if(!raw) return '';
+  return String(raw)
+    .replace(/[’']/g, ':')
+    .replace(/[”"]/g, '')
+    .replace(/\s+/g, '')
+    .replace(/\/(KM|MI)$/i, function(_, unit){ return '/' + unit.toLowerCase(); });
+}
+
+function mapWorkoutType(rawType){
+  var label=String(rawType||'').toLowerCase();
+  if(label.indexOf('run')!==-1) return 'Run';
+  if(label.indexOf('walk')!==-1 || label.indexOf('hike')!==-1) return 'Walk';
+  if(label.indexOf('cycle')!==-1 || label.indexOf('bike')!==-1) return 'Bike';
+  if(label.indexOf('row')!==-1) return 'Row';
+  if(label.indexOf('swim')!==-1) return 'Swim';
+  return 'Other';
+}
+
+function parseWorkoutScreenshotText(rawText, fileName){
+  var lines=String(rawText||'').split(/\r?\n/).map(function(line){ return line.trim(); }).filter(Boolean);
+  var flat=lines.join(' ').replace(/\s+/g,' ').trim();
+  var typeMatch=flat.match(/(Outdoor Run|Indoor Run|Outdoor Walk|Indoor Walk|Outdoor Cycle|Indoor Cycle|Cycle|Bike Ride|Rowing|Swim|Hiking|Functional Strength Training)/i);
+  var sourceWorkoutType=typeMatch?typeMatch[1]:'Apple Watch Workout';
+  var dateLine='';
+  for(var i=0;i<Math.min(lines.length,4);i++){
+    if(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\,?\s*\d{1,2}\s+[A-Za-z]{3,}/i.test(lines[i])){ dateLine=lines[i]; break; }
+  }
+  var timeRangeMatch=flat.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+  var location='';
+  for(var idx=0;idx<lines.length;idx++){
+    if(timeRangeMatch && lines[idx].indexOf(timeRangeMatch[0])!==-1 && lines[idx+1]){
+      location=lines[idx+1].replace(/^[-,.\s]+/,'').trim();
+      break;
+    }
+  }
+
+  var durationMatch=flat.match(/Workout Time\s*([0-9:]{4,8})/i);
+  var distanceMatch=flat.match(/Distance\s*([0-9]+(?:[\.,][0-9]+)?)\s*(KM|MI)/i);
+  var activeMatch=flat.match(/Active Kilocalories\s*([0-9]+(?:[\.,][0-9]+)?)/i);
+  var totalMatch=flat.match(/Total Kilocalories\s*([0-9]+(?:[\.,][0-9]+)?)/i);
+  var elevationMatch=flat.match(/Elevation Gain\s*([0-9]+(?:[\.,][0-9]+)?)\s*M/i);
+  var powerMatch=flat.match(/Avg Power\s*([0-9]+(?:[\.,][0-9]+)?)\s*W/i);
+  var cadenceMatch=flat.match(/Avg Cadence\s*([0-9]+(?:[\.,][0-9]+)?)\s*SPM/i);
+  var paceMatch=flat.match(/Avg Pace\s*([0-9]['’:\"]?[0-9]{2}\s*\/\s*(?:KM|MI))/i);
+  var hrMatch=flat.match(/Avg Heart Rate\s*([0-9]+(?:[\.,][0-9]+)?)\s*BPM/i);
+  var effortMatch=flat.match(/Effort\s*([0-9]+)\s*([A-Za-z]+)/i);
+
+  var isoDate=inferScreenshotDate(dateLine);
+  var distanceUnit=distanceMatch ? distanceMatch[2].toUpperCase() : 'KM';
+  var distanceValue=distanceMatch ? parseFloat(distanceMatch[1].replace(',', '.')) : 0;
+  var distanceKm=distanceUnit==='MI' ? Number((distanceValue * 1.60934).toFixed(2)) : distanceValue;
+  var effortScore=effortMatch ? Math.max(1, Math.min(10, parseInt(effortMatch[1],10) || 5)) : 5;
+  var effortLabel=effortMatch ? effortMatch[2] : (EFFORT_LBL[effortScore] || 'Moderate');
+  var avgHR=hrMatch ? parseInt(hrMatch[1],10) || 0 : 0;
+  var durationValue=durationMatch ? durationMatch[1] : durationFromTimeRange(timeRangeMatch && timeRangeMatch[1], timeRangeMatch && timeRangeMatch[2]);
+  var activeKcal=activeMatch ? parseInt(activeMatch[1],10) || 0 : 0;
+  var totalKcal=totalMatch ? parseInt(totalMatch[1],10) || activeKcal : activeKcal;
+  var notes=[
+    'Imported from Apple Watch screenshot',
+    timeRangeMatch ? ('Time ' + timeRangeMatch[1] + '-' + timeRangeMatch[2]) : '',
+    location ? ('Location ' + location) : ''
+  ].filter(Boolean).join(' | ');
+
+  return {
+    id: uid(),
+    date: isoDate,
+    label: fmtLabel(isoDate),
+    type: mapWorkoutType(sourceWorkoutType),
+    source: 'apple-watch-screenshot',
+    sourceWorkoutType: sourceWorkoutType,
+    duration: durationValue,
+    distanceKm: distanceKm,
+    elevationM: elevationMatch ? parseInt(elevationMatch[1],10) || 0 : 0,
+    avgPace: normalizePaceValue(paceMatch && paceMatch[1]),
+    avgHR: avgHR,
+    maxHR: 0,
+    activeKcal: activeKcal,
+    totalKcal: totalKcal,
+    effortScore: effortScore,
+    effortLabel: effortLabel,
+    hrZone: hrZoneFrom(avgHR),
+    notes: notes,
+    splits: [],
+    location: location,
+    startTime: timeRangeMatch ? timeRangeMatch[1] : '',
+    endTime: timeRangeMatch ? timeRangeMatch[2] : '',
+    avgPowerW: powerMatch ? parseInt(powerMatch[1],10) || 0 : 0,
+    avgCadenceSpm: cadenceMatch ? parseInt(cadenceMatch[1],10) || 0 : 0,
+    imageName: fileName || '',
+    rawText: String(rawText || '').trim()
+  };
 }
 
 export function HomeScreen(props){
@@ -501,6 +665,8 @@ export function CardioScreen(props){
   var editD=useState(null);var editData=editD[0];var setEditData=editD[1];
   var selSess=sid?car.find(function(s){return s.id===sid;}):car[0];
   var sortModeS=useState('date');var sortMode=sortModeS[0];var setSortMode=sortModeS[1];
+  var importBusyS=useState(false);var importBusy=importBusyS[0];var setImportBusy=importBusyS[1];
+  var importErrS=useState('');var importErr=importErrS[0];var setImportErr=importErrS[1];
 
   function saveSession(sess){
     return dbPut('cardio',sess).then(function(){return queueSync('logCardio',sess);}).then(function(){
@@ -538,6 +704,39 @@ export function CardioScreen(props){
     setEditData(dup);setSf(true);
   }
 
+  async function handleImportFile(e){
+    var file=e.target.files && e.target.files[0];
+    if(!file) return;
+    setImportErr('');
+    setImportBusy(true);
+    try{
+      var mod=await import('https://esm.sh/tesseract.js@5.1.1');
+      var worker=await mod.createWorker('eng');
+      var result=await worker.recognize(file);
+      await worker.terminate();
+      var rawText=result && result.data ? result.data.text : '';
+      if(!rawText || !rawText.trim()) throw new Error('No readable workout text was detected in this screenshot.');
+      var imported=parseWorkoutScreenshotText(rawText, file.name);
+      if(!imported.duration && !imported.distanceKm && !imported.avgHR){
+        throw new Error('We could not confidently detect the workout details yet. Try a sharper screenshot or crop closer to the workout card.');
+      }
+      setEditData(imported);
+      setSf(true);
+      setSid(null);
+    }catch(err){
+      setImportErr(err && err.message ? err.message : 'Screenshot import failed.');
+    }finally{
+      setImportBusy(false);
+      e.target.value='';
+    }
+  }
+
+  function openImportPicker(){
+    setImportErr('');
+    var input=document.getElementById('cardio-import-input');
+    if(input) input.click();
+  }
+
   var displayCar = car.slice().sort(function(a,b){
     if(sortMode==='pace'){
       function getSecs(d){if(!d)return 0;var p=String(d).split(':').map(Number);return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:p[0]||0;}
@@ -549,8 +748,15 @@ export function CardioScreen(props){
   });
 
   return html`<div class="screen"><div class="screen-inner">
-    ${sf?html`<${CardioForm} initialData=${editData} onSave=${saveSession} onCancel=${()=>{setSf(false);setEditData(null);}}/>`
-       :html`<button class="btn btn-primary" style="margin-bottom:16px" onclick=${()=>{setEditData(null);setSf(true);}}>+ Log Cardio Session</button>`}
+    <input id="cardio-import-input" type="file" accept="image/*" onchange=${handleImportFile} style="display:none"/>
+    ${!sf?html`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px">
+      <button class="btn btn-primary" onclick=${()=>{setImportErr('');setEditData(null);setSf(true);}}>+ Log Cardio Session</button>
+      <button class="btn btn-outline" onclick=${openImportPicker} disabled=${importBusy}>${importBusy?'Reading Screenshot...':'Import Watch Screenshot'}</button>
+    </div>`:null}
+    ${importErr?html`<div class="err">${importErr}</div>`:null}
+    ${importBusy?html`<div class="success" style="background:rgba(0,243,255,0.08);border-color:rgba(0,243,255,0.34);color:var(--blue)">Reading the screenshot and extracting workout details...</div>`:null}
+    ${sf&&editData&&editData.source==='apple-watch-screenshot'?html`<div class="success" style="background:rgba(0,243,255,0.08);border-color:rgba(0,243,255,0.34);color:var(--blue)">Review the imported workout, adjust anything that looks off, then save it into your cardio history.</div>`:null}
+    ${sf?html`<${CardioForm} initialData=${editData} onSave=${saveSession} onCancel=${()=>{setSf(false);setEditData(null);}}/>`:null}
     ${!sf&&selSess?html`
       <div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
         <div>
