@@ -118,14 +118,23 @@ function App() {
   const streak = Math.min(99, strSessions.length + carSessions.length);
 
   return html`
-    <div class="h-full flex flex-col bg-[#03070b]">
-      <div class="fixed left-4 right-4 top-[16px] z-50 flex justify-between items-center pointer-events-none">
-        <div class="font-mono font-bold text-[#00f3ff] tracking-widest bg-slate-950/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-cyan-400/30">WEMYSS<span class="text-fuchsia-400">OS</span></div>
-        <div class="flex items-center gap-3 pointer-events-auto bg-slate-950/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-amber-400/30">
-          <span class="font-bold text-amber-400">${streak}</span>
+    <div class="app-shell">
+      <div class="topbar-wrap">
+        <div class="topbar">
+          <div class="brand-block">
+            <div class="brand-mark">WW</div>
+            <div>
+              <div class="brand-name">WemyssWorkouts</div>
+              <div class="brand-sub">Training log and recovery board</div>
+            </div>
+          </div>
+          <div class="status-chip">
+            <span class="status-chip-label">Sessions</span>
+            <span class="status-chip-value">${streak}</span>
+          </div>
         </div>
       </div>
-      <div style="height: calc(68px + var(--safe-top, 0px));"></div>
+      <div style="height: calc(86px + var(--safe-top, 0px));"></div>
 
       ${tab === 'home' ? html`<${HomeScreen} strSessions=${strSessions} carSessions=${carSessions}/>` : null}
       ${tab === 'strength' ? html`<${StrengthScreen} strSessions=${strSessions} setSessions=${setStrSessions}/>` : null}
