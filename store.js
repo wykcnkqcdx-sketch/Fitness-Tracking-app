@@ -23,9 +23,31 @@ export function dbDelete(store,id){return openDB().then(function(db){return new 
 
 export function getSyncConfig(){try{return JSON.parse(localStorage.getItem('ww_sync')||'{}');}catch(e){return {};}}
 export function setSyncConfig(cfg){localStorage.setItem('ww_sync',JSON.stringify(cfg));}
+function sanitizeSyncData(action, data){
+  if(action !== 'logCardio' || !data) return data;
+  return {
+    id: data.id,
+    date: data.date,
+    label: data.label,
+    type: data.type,
+    duration: data.duration,
+    distanceKm: data.distanceKm || 0,
+    elevationM: data.elevationM || 0,
+    avgPace: data.avgPace || '-',
+    avgHR: data.avgHR || 0,
+    maxHR: data.maxHR || 0,
+    activeKcal: data.activeKcal || 0,
+    totalKcal: data.totalKcal || 0,
+    effortScore: data.effortScore || 0,
+    effortLabel: data.effortLabel || '',
+    hrZone: data.hrZone || 0,
+    notes: data.notes || '',
+    splits: Array.isArray(data.splits) ? data.splits : []
+  };
+}
 function syncItem(item,cfg){
   if(!cfg.url)return Promise.reject(new Error('No sync URL configured'));
-  const payload=Object.assign({},{data:item.data},{apiKey:cfg.apiKey||'',action:item.action});
+  const payload=Object.assign({},{data:sanitizeSyncData(item.action, item.data)},{apiKey:cfg.apiKey||'',action:item.action});
   return fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'})
     .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
     .then(function(j){if(j.error)throw new Error(j.error);return j;});
